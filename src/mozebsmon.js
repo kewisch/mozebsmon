@@ -73,9 +73,13 @@ export default class MozEbsMon {
     let paths = await this.getpaths(argv);
     let options = this.ripgrep.constructor.argsToOptions(argv);
 
-    console.warn(`Searching ${paths.length} files for ${argv.patterns.length} pattern` +
-                 ` between ${argv.after || "the beginning"} and ${nowdate}`);
-    await this.ripgrep.run(paths, argv.patterns, options);
+    if (paths.length == 0) {
+      console.warn(`No files found between ${argv.after || "the beginning"} and ${nowdate}`);
+    } else {
+      console.warn(`Searching ${paths.length} files for ${argv.patterns.length} pattern` +
+                   ` between ${argv.after || "the beginning"} and ${nowdate}`);
+      await this.ripgrep.run(paths, argv.patterns, options);
+    }
   }
 
   async searchRun({ outdir }) {
