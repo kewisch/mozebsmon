@@ -71,7 +71,7 @@ export default class MozEbsMon {
     argv.until = nowdate;
 
     let paths = await this.getpaths(argv);
-    let options = Ripgrep.argsToOptions(argv);
+    let options = this.ripgrep.constructor.argsToOptions(argv);
 
     console.warn(`Searching ${paths.length} files for ${argv.patterns.length} pattern` +
                  ` between ${argv.after || "the beginning"} and ${nowdate}`);

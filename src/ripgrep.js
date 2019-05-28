@@ -28,11 +28,11 @@ export default class Ripgrep {
   static optionsToString(options) {
     let stringOptions = [];
     for (let [name, value] of Object.entries(options)) {
-      if (typeof value == "boolean" || typeof value == "undefined") {
+      if (typeof value == "boolean") {
         stringOptions.push(`--${name}`);
       } else if (Array.isArray(value)) {
         stringOptions.push(...value.map(option => `--${name} ${option}`));
-      } else {
+      } else if (typeof value != "undefined") {
         stringOptions.push(`--${name} ${value}`);
       }
     }
