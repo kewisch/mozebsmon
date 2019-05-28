@@ -1,0 +1,21 @@
+{
+  "name": "mozebsmon",
+  "version": "2.2.1",
+  "description": "Keep tabs on newly submitted add-ons on unzipped code repo",
+  "main": "src/loader.js",
+  "dependencies": {
+    "amolib": "kewisch/amolib",
+    "del": "^4.1.1",
+    "esm": "^3.2.25",
+    "pushbullet": "^2.4.0",
+    "request-debug": "^0.2.0",
+    "yargs": "^12.0.5"
+  },
+  "devDependencies": {
+    "eslint": "^5.16.0",
+    "eslint-plugin-jsdoc": "^6.0.2"
+  },
+  "author": "Philipp Kewisch",
+  "license": "MPL-2.0",
+  "bin": "src/loader.js"
+}
