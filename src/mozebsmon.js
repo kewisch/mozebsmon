@@ -9,7 +9,8 @@ import { getPatternConfig } from "./patternconfig";
 
 import {
   ADDON_TYPE_STRINGS, ADDON_CHANNEL_STRINGS,
-  ADDON_STATUS_STRINGS, ADDON_FILE_STATUS_STRINGS
+  ADDON_STATUS_STRINGS, ADDON_FILE_STATUS_STRINGS,
+  REDASH_POLLING_TIMEOUT_MS
 } from "amolib";
 
 export default class MozEbsMon {
@@ -57,7 +58,7 @@ export default class MozEbsMon {
       query.where("f.created <= " + JSON.stringify(until));
     }
 
-    let result = await query.run();
+    let result = await query.run(2 * REDASH_POLLING_TIMEOUT_MS);
     return result.query_result.data.rows.map(row => {
       return `${row.addontype_id}/${row.addon_id}/${row.channel}/${row.version_id}/${row.file_id}`;
     });
