@@ -31,9 +31,9 @@ export default class Ripgrep {
       if (typeof value == "boolean") {
         stringOptions.push(`--${name}`);
       } else if (Array.isArray(value)) {
-        stringOptions.push(...value.map(option => `--${name} ${option}`));
+        stringOptions.push(...value.map(option => `--${name} '${option}'`));
       } else if (typeof value != "undefined") {
-        stringOptions.push(`--${name} ${value}`);
+        stringOptions.push(`--${name} '${value}'`);
       }
     }
     return stringOptions.join(" ");
@@ -77,16 +77,24 @@ export default class Ripgrep {
     let foundFiles = [];
 
     await new Promise((resolve, reject) => {
-      let rgproc = child_process.spawn("sh", ["-c", xargscmd], {
+      let rgproc = child_process.spawn(xargscmd, {
         cwd: path.resolve(this.cwd),
         env: { PATH: process.env.PATH },
-        // stdio: ["ignore", "pipe", this.debug ? "inherit" : "ignore"],
-        stdio: ["ignore", "pipe", "inherit"],
+        shell: "/bin/bash",
+        // stdio: ["ignore", "pipe", "pipe"]
+        stdio: ["ignore", "pipe", "inherit"]
       });
 
-      let rli = readline.createInterface({ input: rgproc.stdout });
+      // I just can't get stderr to pipe. I'm done for today.
 
-      rli.on("line", (input) => {
+
+      let rlout = readline.createInterface({ input: rgproc.stdout });
+      // let rlerr = readline.createInterface({ input: rgproc.stderr });
+      let missing = [];
+      let nofiles = null;
+      // let haserrors = false;
+
+      rlout.on("line", (input) => {
         let file = input.substr(0, input.indexOf(":"));
         let [addontype_id, addon_id, version_id, file_id] =
           file.split("/", 4).map(part => parseInt(part, 10));
@@ -100,14 +108,38 @@ export default class Ripgrep {
         }
       });
 
+      // const RE_NO_SUCH_FILE = /([^:]+): No such file or directory \(os error 2\)/;
+
+      /* rlerr.on("line", (input) => {
+        if (this.debug) {
+          console.error(input);
+        }
+
+        let match = input.match(RE_NO_SUCH_FILE);
+        if (match) {
+          missing.push(match[1]);
+        }
+
+        if (input.startsWith("No files were searched")) {
+          nofiles = input;
+          process.stderr.write(input);
+        }
+
+        haserrors = true;
+      }); */
+
       rgproc.on("close", (code) => {
-        if (code < 2) {
+        if (missing.length) {
+          reject("Some files were not found, likely they were not yet unzipped:\n\t" + missing.join("\n\t"));
+        } else if (nofiles) {
+          reject(nofiles);
+        // } else if (code != 0 && haserrors) {
+        //   reject("ripgrep failed somewhere along the way. Run with --debug for details.");
+        } else if (code > 0) {
+          console.log(`Note: xargs has exit code ${code}, but this could also mean there were no matches`);
           resolve();
-        } else if (code == 123) {
-          reject("Some files were not found, likely they were not yet unzipped." +
-                 " Run with --debug for details.");
         } else {
-          reject(`Ripgrep error ${code}. Run with --debug for details.`);
+          resolve();
         }
       });
     });
