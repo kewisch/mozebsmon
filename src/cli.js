@@ -43,6 +43,11 @@ import { DEFAULT_EBS_UNZIPPED_PATH } from "./constants";
         nargs: 1,
         describe: "The date to search after"
       })
+      .option("u", {
+        alias: "until",
+        nargs: 1,
+        describe: "The date to search up to"
+      })
       .option("s", {
         alias: "status",
         type: "array",

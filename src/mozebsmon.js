@@ -68,7 +68,9 @@ export default class MozEbsMon {
     nowdate.setHours(0, 0, 0, 0);
     nowdate = nowdate.toISOString();
 
-    argv.until = nowdate;
+    if (!argv.until) {
+      argv.until = nowdate;
+    }
 
     let paths = await this.getpaths(argv);
     let options = this.ripgrep.constructor.argsToOptions(argv);
