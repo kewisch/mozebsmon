@@ -85,6 +85,7 @@ import { DEFAULT_EBS_UNZIPPED_PATH } from "./constants";
   function rgYargs(subyargs) {
     subyargs.option("g", {
       "alias": "glob",
+      "nargs": 1,
       "default": [],
       "type": "array"
     })
