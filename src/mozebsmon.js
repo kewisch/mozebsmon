@@ -153,8 +153,7 @@ export default class MozEbsMon {
 
   async track(pattern, argv) {
     let patternconfig = getPatternConfig();
-    let options = this.ripgrep.constructor.argsToOptions(options);
-    let added = patternconfig.add(pattern, Ripgrep.argsToOptions(argv));
+    let added = patternconfig.add(pattern, this.ripgrep.constructor.argsToOptions(argv));
 
     if (added) {
       patternconfig.save();

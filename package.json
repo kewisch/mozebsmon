@@ -1,6 +1,6 @@
 {
   "name": "mozebsmon",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "Keep tabs on newly submitted add-ons on unzipped code repo",
   "main": "src/loader.js",
   "dependencies": {
