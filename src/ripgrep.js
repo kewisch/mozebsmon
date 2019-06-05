@@ -44,7 +44,7 @@ export default class Ripgrep {
     this.cwd = cwd;
   }
 
-  async run(paths, patterns, extraOptions, outStream=null) {
+  async run(paths, patterns, extraOptions, outStream=null, foundAddons=null) {
     let folder = await mkdtemp(path.join(os.tmpdir(), "mozebs"));
 
     let rgfiles = path.join(folder, "rgfiles");
@@ -55,7 +55,7 @@ export default class Ripgrep {
 
     let response;
     try {
-      response = await this.runFiles(rgfiles, patternfile, extraOptions, outStream);
+      response = await this.runFiles(rgfiles, patternfile, extraOptions, outStream, foundAddons);
     } finally {
       if (this.debug) {
         console.warn(`Debugging is on, temporary folder ${folder} not deleted`);
@@ -66,7 +66,14 @@ export default class Ripgrep {
     return response;
   }
 
-  async runFiles(paths, patterns, extraOptions, outStream=null) {
+  async runFiles(paths, patterns, extraOptions, outStream=null, foundAddons=null) {
+    function multilog(msg) {
+      if (outStream) {
+        outStream.write(msg + "\n");
+      } else {
+        console.log(msg);
+      }
+    }
     let options = Ripgrep.optionsToString(extraOptions);
     let rgcmd = `rg -f ${path.resolve(patterns)} ${RIPGREP_DEFAULTS} ${options}`;
     let xargscmd = `cat ${paths} | xargs ${rgcmd}`;
@@ -87,11 +94,12 @@ export default class Ripgrep {
 
       // I just can't get stderr to pipe. I'm done for today.
 
-
       let rlout = readline.createInterface({ input: rgproc.stdout });
       // let rlerr = readline.createInterface({ input: rgproc.stderr });
       let missing = [];
       let nofiles = null;
+      let skipped = new Set();
+      let foundNow = new Set();
       // let haserrors = false;
 
       rlout.on("line", (input) => {
@@ -99,12 +107,12 @@ export default class Ripgrep {
         let [addontype_id, addon_id, version_id, file_id] =
           file.split("/", 4).map(part => parseInt(part, 10));
 
-        foundFiles.push({ addontype_id, addon_id, version_id, file_id });
-
-        if (outStream) {
-          outStream.write(input + "\n");
+        if (foundAddons && foundAddons.has(addon_id)) {
+          skipped.add(addon_id);
         } else {
-          console.log(input);
+          foundNow.add(addon_id);
+          foundFiles.push({ addontype_id, addon_id, version_id, file_id });
+          multilog(input);
         }
       });
 
@@ -129,6 +137,15 @@ export default class Ripgrep {
       }); */
 
       rgproc.on("close", (code) => {
+        if (skipped.size) {
+          multilog("Skipped the following add-on ids because they were already found in a previous pattern:");
+          multilog("\t" + [...skipped].join("\n\t"));
+        }
+
+        for (let addon_id of foundNow) {
+          foundAddons.add(addon_id);
+        }
+
         if (missing.length) {
           reject("Some files were not found, likely they were not yet unzipped:\n\t" + missing.join("\n\t"));
         } else if (nofiles) {

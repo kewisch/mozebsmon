@@ -67,20 +67,20 @@ export default class MozEbsMon {
   async search(argv) {
     let nowdate = new Date();
     nowdate.setHours(0, 0, 0, 0);
-    nowdate = nowdate.toISOString();
+    let nowisodate = nowdate.toISOString();
 
     if (!argv.until) {
-      argv.until = nowdate;
+      argv.until = nowisodate;
     }
 
     let paths = await this.getpaths(argv);
     let options = this.ripgrep.constructor.argsToOptions(argv);
 
     if (paths.length == 0) {
-      console.warn(`No files found between ${argv.after || "the beginning"} and ${nowdate}`);
+      console.warn(`No files found between ${argv.after || "the beginning"} and ${nowisodate}`);
     } else {
       console.warn(`Searching ${paths.length} files for ${argv.patterns.length} pattern` +
-                   ` between ${argv.after || "the beginning"} and ${nowdate}`);
+                   ` between ${argv.after || "the beginning"} and ${nowisodate}`);
       await this.ripgrep.run(paths, argv.patterns, options);
     }
   }
@@ -94,54 +94,61 @@ export default class MozEbsMon {
     // EBS volume only unzips every 24 hours, gotta go back to the start of today
     let nowdate = new Date();
     nowdate.setHours(0, 0, 0, 0);
-    nowdate = nowdate.toISOString();
+    let nowisodate = nowdate.toISOString();
 
+    let output = fs.createWriteStream(path.join(outdir, `mozebs-${nowisodate}.txt`));
+    let foundAddons = new Set();
     let byDate = {};
-    for (let [pattern, data] of Object.entries(this.patternconfig.data)) {
-      let { lastrun, options } = data;
-      let key = lastrun + "#" + JSON.stringify(options); // TODO not a great key
 
-      if (!(key in byDate)) {
-        byDate[key] = { patterns: [], options: options, date: lastrun };
+    for (let [pattern, data] of Object.entries(this.patternconfig.data)) {
+      if (data.disabled) {
+        continue;
+      }
+      if (new Date(data.lastrun) >= nowdate) {
+        continue;
+      }
+      if (!(data.lastrun in byDate)) {
+        multilog(`Getting new files between ${data.lastrun} and ${nowisodate}`);
+        byDate[data.lastrun] = {
+          paths: await this.getpaths({ after: data.lastrun, until: nowisodate }),
+          data: []
+        };
       }
 
-      byDate[key].patterns.push(pattern);
+      byDate[data.lastrun].data.push({ pattern: pattern, options: data.options });
     }
 
-    let output = fs.createWriteStream(path.join(outdir, `mozebs-${nowdate}.txt`));
 
     try {
-      for (let { patterns, options, date } of Object.values(byDate)) {
-        multilog(`Getting new files between ${date} and ${nowdate}`);
-        let paths = await this.getpaths({ after: date, until: nowdate });
+      for (let { paths, data } of Object.values(byDate)) {
+        for (let { options, pattern } of data) {
+          if (paths.length) {
+            let optionsString = this.ripgrep.constructor.optionsToString(options);
+            multilog(`Running ${pattern} on ${paths.length} paths with options ${optionsString}`);
 
-        if (paths.length) {
-          let optionsString = this.ripgrep.constructor.optionsToString(options);
-          multilog(`Running the following patterns on ${paths.length} paths` +
-                   ` with options ${optionsString}:`);
-          multilog("\t" + patterns.join("\n\t"));
+            let files;
 
-          let files;
+            try {
+              files = await this.ripgrep.run(paths, [pattern], options, output, foundAddons);
+            } catch (e) {
+              multilog("Error during ripgrep run: " + e);
+              continue;
+            }
 
-          try {
-            files = await this.ripgrep.run(paths, patterns, options, output);
-          } catch (e) {
-            multilog("Error during ripgrep run: " + e);
-            continue;
+            multilog(`Found ${files.length} files`);
+
+            // This push can go ahead and fail, don't wait on it.
+            this.push.notify(`Found ${files.length} files`, `Pattern ${pattern}`);
+          } else {
+            multilog("No new files for " + pattern);
           }
 
-          multilog(`Found ${files.length} files`);
-
-          // This push can go ahead and fail, don't wait on it.
-          this.push.notify(`Found ${files.length} files`, `Patterns ${patterns.join(",")}`);
-        } else {
-          multilog("No new files for the following patterns:");
-          multilog("\t" + patterns.join("\n\t"));
+          this.patternconfig.markrun(pattern, nowisodate);
         }
+      }
 
-        for (let pattern of patterns) {
-          this.patternconfig.markrun(pattern, nowdate);
-        }
+      if (Object.keys(byDate).length == 0) {
+        multilog("Nothing to be done");
       }
     } finally {
       this.patternconfig.save();
