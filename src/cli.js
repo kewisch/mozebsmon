@@ -14,9 +14,10 @@ import {
   getConfig
 } from "amolib";
 
-import Ripgrep from "./ripgrep";
 import MozEbsMon from "./mozebsmon";
+import PatternConfig from "./patternconfig";
 import PushNotifications from "./push";
+import Ripgrep from "./ripgrep";
 import { DEFAULT_EBS_UNZIPPED_PATH } from "./constants";
 
 
@@ -27,6 +28,13 @@ import { DEFAULT_EBS_UNZIPPED_PATH } from "./constants";
   process.stdin.setEncoding("utf8");
 
   let config = getConfig();
+
+  function expandhome(arg) {
+    if (arg.startsWith("~/")) {
+      arg = path.join(os.homedir(), arg.substr(2));
+    }
+    return arg;
+  }
 
   function searchYargs(subyargs) {
     subyargs.option("c", {
@@ -106,10 +114,18 @@ import { DEFAULT_EBS_UNZIPPED_PATH } from "./constants";
       "global": true,
       "describe": "Enable debugging"
     })
+    .option("patternconfig", {
+      "global": true,
+      "default": "~/.amo_ebs_patterns",
+      "coerce": expandhome,
+      "describe": "The path to read patterns from"
+    })
     .option("unzipped", {
       "nargs": 1,
       "global": true,
-      "default": DEFAULT_EBS_UNZIPPED_PATH
+      "default": DEFAULT_EBS_UNZIPPED_PATH,
+      "coerce": expandhome,
+      "describe": "The path that contains the unzipped add-on files"
     })
     .command("paths", "Show paths for the subset of add-ons", (subyargs) => {
       searchYargs(subyargs);
@@ -123,12 +139,7 @@ import { DEFAULT_EBS_UNZIPPED_PATH } from "./constants";
         "alias": "outdir",
         "nargs": 1,
         "default": ".",
-        "coerce": (arg) => {
-          if (arg.startsWith("~/")) {
-            arg = path.join(os.homedir(), arg.substr(2));
-          }
-          return arg;
-        }
+        "coerce": expandhome
       });
     })
     .command("track [pattern]", "Track a specific pattern", (subyargs) => {
@@ -146,6 +157,7 @@ import { DEFAULT_EBS_UNZIPPED_PATH } from "./constants";
       debug: argv.debug
     }),
     ripgrep: new Ripgrep(argv.unzipped, { debug: argv.debug }),
+    patternconfig: new PatternConfig(argv.patternconfig),
     push: new PushNotifications(config.mozebsmon && config.mozebsmon.push)
   });
 

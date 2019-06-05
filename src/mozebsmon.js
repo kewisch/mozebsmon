@@ -5,7 +5,6 @@
 
 import fs from "fs";
 import path from "path";
-import { getPatternConfig } from "./patternconfig";
 
 import {
   ADDON_TYPE_STRINGS, ADDON_CHANNEL_STRINGS,
@@ -14,9 +13,10 @@ import {
 } from "amolib";
 
 export default class MozEbsMon {
-  constructor({ redash, ripgrep, push }) {
+  constructor({ redash, ripgrep, patternconfig, push }) {
     this.redash = redash;
     this.ripgrep = ripgrep;
+    this.patternconfig = patternconfig;
     this.push = push;
   }
 
@@ -91,15 +91,13 @@ export default class MozEbsMon {
       output.write(args.join(" ") + "\n");
     }
 
-    let patternconfig = getPatternConfig();
-
     // EBS volume only unzips every 24 hours, gotta go back to the start of today
     let nowdate = new Date();
     nowdate.setHours(0, 0, 0, 0);
     nowdate = nowdate.toISOString();
 
     let byDate = {};
-    for (let [pattern, data] of Object.entries(patternconfig.data)) {
+    for (let [pattern, data] of Object.entries(this.patternconfig.data)) {
       let { lastrun, options } = data;
       let key = lastrun + "#" + JSON.stringify(options); // TODO not a great key
 
@@ -142,21 +140,20 @@ export default class MozEbsMon {
         }
 
         for (let pattern of patterns) {
-          patternconfig.markrun(pattern, nowdate);
+          this.patternconfig.markrun(pattern, nowdate);
         }
       }
     } finally {
-      patternconfig.save();
+      this.patternconfig.save();
       output.close();
     }
   }
 
   async track(pattern, argv) {
-    let patternconfig = getPatternConfig();
-    let added = patternconfig.add(pattern, this.ripgrep.constructor.argsToOptions(argv));
+    let added = this.patternconfig.add(pattern, this.ripgrep.constructor.argsToOptions(argv));
 
     if (added) {
-      patternconfig.save();
+      this.patternconfig.save();
     } else {
       console.log("Pattern already tracked");
     }

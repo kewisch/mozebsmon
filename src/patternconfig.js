@@ -3,26 +3,12 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  * Portions Copyright (C) Philipp Kewisch, 2019 */
 
-import path from "path";
-import os from "os";
 import fs from "fs";
 
-const DEFAULT_CONFIG = path.join(os.homedir(), ".amo_ebs_patterns");
-
-var gConfig = null;
-
-export function getPatternConfig(filename) {
-  if (!gConfig) {
-    gConfig = new PatternConfig(filename || DEFAULT_CONFIG);
-    gConfig.load();
-  }
-  return gConfig;
-}
-
-
-class PatternConfig {
-  constructor(filename=DEFAULT_CONFIG) {
+export default class PatternConfig {
+  constructor(filename) {
     this.filename = filename;
+    this.load();
   }
 
   load() {
