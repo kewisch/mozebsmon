@@ -138,7 +138,9 @@ export default class MozEbsMon {
             multilog(`Found ${files.length} files`);
 
             // This push can go ahead and fail, don't wait on it.
-            this.push.notify(`Found ${files.length} files`, `Pattern ${pattern}`);
+            if (files.length > 0) {
+              this.push.notify(`Found ${files.length} files`, `Pattern ${pattern}`);
+            }
           } else {
             multilog("No new files for " + pattern);
           }
