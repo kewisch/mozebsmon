@@ -11,6 +11,8 @@ import fs from "fs";
 import del from "del";
 import util from "util";
 
+import { DEFAULT_EBS_BANNED_PATH } from "./constants";
+
 const RIPGREP_DEFAULTS = "--no-ignore --no-heading --with-filename --line-number";
 
 const mkdtemp = util.promisify(fs.mkdtemp);
@@ -88,19 +90,15 @@ export default class Ripgrep {
         cwd: path.resolve(this.cwd),
         env: { PATH: process.env.PATH },
         shell: "/bin/bash",
-        // stdio: ["ignore", "pipe", "pipe"]
-        stdio: ["ignore", "pipe", "inherit"]
+        stdio: ["ignore", "pipe", "pipe"]
       });
 
-      // I just can't get stderr to pipe. I'm done for today.
-
       let rlout = readline.createInterface({ input: rgproc.stdout });
-      // let rlerr = readline.createInterface({ input: rgproc.stderr });
+      let rlerr = readline.createInterface({ input: rgproc.stderr });
       let missing = [];
       let nofiles = null;
       let skipped = new Set();
       let foundNow = new Set();
-      // let haserrors = false;
 
       rlout.on("line", (input) => {
         let file = input.substr(0, input.indexOf(":"));
@@ -116,9 +114,8 @@ export default class Ripgrep {
         }
       });
 
-      // const RE_NO_SUCH_FILE = /([^:]+): No such file or directory \(os error 2\)/;
-
-      /* rlerr.on("line", (input) => {
+      const RE_NO_SUCH_FILE = /([^:]+): No such file or directory \(os error 2\)/;
+      rlerr.on("line", (input) => {
         if (this.debug) {
           console.error(input);
         }
@@ -132,9 +129,7 @@ export default class Ripgrep {
           nofiles = input;
           process.stderr.write(input);
         }
-
-        haserrors = true;
-      }); */
+      });
 
       rgproc.on("close", (code) => {
         if (skipped.size) {
@@ -146,12 +141,14 @@ export default class Ripgrep {
           foundAddons.add(addon_id);
         }
 
+        missing = missing.filter(file => {
+          return !fs.existsSync(path.join(DEFAULT_EBS_BANNED_PATH, file));
+        });
+
         if (missing.length) {
           reject("Some files were not found, likely they were not yet unzipped:\n\t" + missing.join("\n\t"));
         } else if (nofiles) {
           reject(nofiles);
-        // } else if (code != 0 && haserrors) {
-        //   reject("ripgrep failed somewhere along the way. Run with --debug for details.");
         } else if (code > 0) {
           console.log(`Note: xargs has exit code ${code}, but this could also mean there were no matches`);
           resolve();

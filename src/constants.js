@@ -4,3 +4,4 @@
  * Portions Copyright (C) Philipp Kewisch, 2019 */
 
 export const DEFAULT_EBS_UNZIPPED_PATH = "/mnt/ebs/unzipped";
+export const DEFAULT_EBS_BANNED_PATH = "/mnt/ebs/unzipped_banned";
