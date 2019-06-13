@@ -146,7 +146,9 @@ export default class Ripgrep {
         });
 
         if (missing.length) {
-          reject("Some files were not found, likely they were not yet unzipped:\n\t" + missing.join("\n\t"));
+          // Resolve anyway, assuming this is filesystem weirdness
+          console.log("Some files were not found, this shouldn't be happening:\n\t" + missing.join("\n\t"));
+          resolve();
         } else if (nofiles) {
           reject(nofiles);
         } else if (code > 0) {

@@ -12,6 +12,8 @@ import {
   REDASH_POLLING_TIMEOUT_MS
 } from "amolib";
 
+import { DEFAULT_EBS_BANNED_PATH } from "./constants";
+
 export default class MozEbsMon {
   constructor({ redash, ripgrep, patternconfig, push }) {
     this.redash = redash;
@@ -20,7 +22,7 @@ export default class MozEbsMon {
     this.push = push;
   }
 
-  async getpaths({ channel, after, until, addontype, status, addonstatus }) {
+  async getpaths({ channel, after, until, addontype, status, addonstatus, maxid, minid, aspath = true }) {
     let query = this.redash.buildQuery()
       .select("f.created", "a.addontype_id", "a.id AS addon_id", "v.channel",
         "v.id AS version_id", "f.id AS file_id")
@@ -58,73 +60,119 @@ export default class MozEbsMon {
       query.where("f.created <= " + JSON.stringify(until));
     }
 
+    if (maxid) {
+      query.where("f.id <= " + JSON.stringify(maxid));
+    }
+
+    if (minid) {
+      query.where("f.id >= " + JSON.stringify(minid));
+    }
+
     let result = await query.run(2 * REDASH_POLLING_TIMEOUT_MS);
-    return result.query_result.data.rows.map(row => {
-      return `${row.addontype_id}/${row.addon_id}/${row.channel}/${row.version_id}/${row.file_id}`;
-    });
+    if (aspath) {
+      return result.query_result.data.rows.map(row => {
+        return `${row.addontype_id}/${row.addon_id}/${row.channel}/${row.version_id}/${row.file_id}`;
+      });
+    } else {
+      return result.query_result.data.rows;
+    }
+  }
+
+  async getMaxId({ addontype, unzipped }) {
+    let startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    let rows = await this.getpaths({ after: startOfDay.toISOString(), addontype: addontype, aspath: false });
+
+    let maxid = 0;
+    let maxdate = null;
+    for (let row of rows) {
+      let filepath = `${row.addontype_id}/${row.addon_id}/${row.channel}/${row.version_id}/${row.file_id}`;
+      let file_id = parseInt(row.file_id, 10);
+
+      if ((fs.existsSync(path.join(unzipped, filepath)) ||
+           fs.existsSync(path.join(DEFAULT_EBS_BANNED_PATH, filepath))) &&
+          file_id > maxid) {
+        maxid = file_id;
+        maxdate = row.created;
+      }
+    }
+
+    return { maxid, maxdate };
   }
 
   async search(argv) {
-    let nowdate = new Date();
-    nowdate.setHours(0, 0, 0, 0);
-    let nowisodate = nowdate.toISOString();
-
-    if (!argv.until) {
-      argv.until = nowisodate;
+    let paths;
+    if (argv.channel || argv.after || argv.until || argv.status || argv.addonstatus) {
+      paths = await this.getpaths(argv);
     }
 
-    let paths = await this.getpaths(argv);
     let options = this.ripgrep.constructor.argsToOptions(argv);
 
-    if (paths.length == 0) {
+    if (paths && paths.length == 0) {
       console.warn(`No files found between ${argv.after || "the beginning"} and ${nowisodate}`);
-    } else {
+    } else if (paths) {
       console.warn(`Searching ${paths.length} files for ${argv.patterns.length} pattern` +
                    ` between ${argv.after || "the beginning"} and ${nowisodate}`);
       await this.ripgrep.run(paths, argv.patterns, options);
+    } else {
+      console.warn(`Searching all files for ${argv.patterns.length} pattern(s)`);
+      let addonTypeIds = argv.addontype.map(type => ADDON_TYPE_STRINGS[type] || type);
+      await this.ripgrep.run(addonTypeIds, argv.patterns, options);
     }
   }
 
-  async searchRun({ outdir }) {
+  async searchRun({ outdir, unzipped }) {
     function multilog(...args) {
       console.log(...args);
       output.write(args.join(" ") + "\n");
     }
 
-    // EBS volume only unzips every 24 hours, gotta go back to the start of today
-    let nowdate = new Date();
-    nowdate.setHours(0, 0, 0, 0);
-    let nowisodate = nowdate.toISOString();
+    let { maxid, maxdate } = await this.getMaxId({ unzipped });
 
-    let output = fs.createWriteStream(path.join(outdir, `mozebs-${nowisodate}.txt`));
+    let output = fs.createWriteStream(path.join(outdir, `mozebs-${maxdate}.txt`));
     let foundAddons = new Set();
     let byDate = {};
+
+    multilog(`Newest available add-on file is ${maxid} at ${maxdate}`);
 
     for (let [pattern, data] of Object.entries(this.patternconfig.data)) {
       if (data.disabled) {
         continue;
       }
-      if (new Date(data.lastrun) >= nowdate) {
+
+      let lastid = typeof data.lastrun == "number" ? data.lastrun : null;
+      let lastdate = typeof data.lastrun == "string" ? data.lastrun : null;
+
+      if (lastid && lastid >= maxid) {
         continue;
       }
+
       if (!(data.lastrun in byDate)) {
-        multilog(`Getting new files between ${data.lastrun} and ${nowisodate}`);
-        byDate[data.lastrun] = {
-          paths: await this.getpaths({ after: data.lastrun, until: nowisodate }),
-          data: []
-        };
+        if (data.lastrun) {
+          multilog(`Getting new files between ${data.lastrun} and ${maxid}`);
+          byDate[data.lastrun] = {
+            paths: await this.getpaths({ minid: lastid, maxid: maxid, after: lastdate }),
+            data: []
+          };
+        } else {
+          byDate[data.lastrun] = {
+            paths: ["."],
+            data: []
+          };
+        }
       }
 
       byDate[data.lastrun].data.push({ pattern: pattern, options: data.options });
     }
-
 
     try {
       for (let { paths, data } of Object.values(byDate)) {
         for (let { options, pattern } of data) {
           if (paths.length) {
             let optionsString = this.ripgrep.constructor.optionsToString(options);
-            multilog(`Running ${pattern} on ${paths.length} paths with options ${optionsString}`);
+            let pathname = paths.length == 1 && paths[0] == "." ? "all" : paths.length;
+            multilog(`Running ${pattern} on ${pathname} paths with options ${optionsString}`);
 
             let files;
 
@@ -145,7 +193,7 @@ export default class MozEbsMon {
             multilog("No new files for " + pattern);
           }
 
-          this.patternconfig.markrun(pattern, nowisodate);
+          this.patternconfig.markrun(pattern, maxid);
         }
       }
 
