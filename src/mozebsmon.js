@@ -210,6 +210,9 @@ export default class MozEbsMon {
     let added = this.patternconfig.add(pattern, this.ripgrep.constructor.argsToOptions(argv));
 
     if (added) {
+      if (argv.maxid) {
+        this.patternconfig.markrun(pattern, argv.maxid);
+      }
       this.patternconfig.save();
     } else {
       console.log("Pattern already tracked");

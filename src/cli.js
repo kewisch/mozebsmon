@@ -144,6 +144,11 @@ import { DEFAULT_EBS_UNZIPPED_PATH } from "./constants";
     })
     .command("track [pattern]", "Track a specific pattern", (subyargs) => {
       rgYargs(subyargs);
+      subyargs.option("maxid", {
+        nargs: 1,
+        type: "number",
+        describe: "Set up tracking starting at this id"
+      });
     })
     .demandCommand(1, 1, "Error: Missing required command")
     .config((config && config.mozebsmon && config.mozebsmon.defaults) || {})
