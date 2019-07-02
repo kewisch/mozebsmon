@@ -118,6 +118,8 @@ export default class MozEbsMon {
                    ` between ${argv.after || "the beginning"} and ${nowisodate}`);
       files = await this.ripgrep.run(paths, argv.patterns, options);
     } else {
+      let { maxid, maxdate } = await this.getMaxId(argv);
+      console.warn(`Maximum file id is ${maxid} at ${maxdate}`);
       console.warn(`Searching all files for ${argv.patterns.length} pattern(s)`);
       let addonTypeIds = argv.addontype.map(type => ADDON_TYPE_STRINGS[type] || type);
       files = await this.ripgrep.run(addonTypeIds, argv.patterns, options);
@@ -136,7 +138,11 @@ export default class MozEbsMon {
 
     let { maxid, maxdate } = await this.getMaxId({ unzipped });
 
-    let output = fs.createWriteStream(path.join(outdir, `mozebs-${maxdate}.txt`));
+    let totalfiles = 0;
+    let outpath = path.join(outdir, `mozebs-${maxdate}.txt`);
+    console.log("Writing results to " + outpath);
+
+    let output = fs.createWriteStream(outpath);
     let foundAddons = new Set();
     let byDate = {};
 
@@ -190,6 +196,7 @@ export default class MozEbsMon {
             }
 
             multilog(`Found ${files.length} files`);
+            totalfiles += files.length;
 
             // This push can go ahead and fail, don't wait on it.
             if (files.length > 0) {
@@ -205,6 +212,8 @@ export default class MozEbsMon {
 
       if (Object.keys(byDate).length == 0) {
         multilog("Nothing to be done");
+      } else {
+        this.push.notify(`Search run complete, found ${totalfiles} files`, `${Object.keys(byDate).length} patterns`);
       }
     } finally {
       this.patternconfig.save();
