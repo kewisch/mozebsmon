@@ -109,16 +109,22 @@ export default class MozEbsMon {
 
     let options = this.ripgrep.constructor.argsToOptions(argv);
 
+    let files = [];
+
     if (paths && paths.length == 0) {
       console.warn(`No files found between ${argv.after || "the beginning"} and ${nowisodate}`);
     } else if (paths) {
       console.warn(`Searching ${paths.length} files for ${argv.patterns.length} pattern` +
                    ` between ${argv.after || "the beginning"} and ${nowisodate}`);
-      await this.ripgrep.run(paths, argv.patterns, options);
+      files = await this.ripgrep.run(paths, argv.patterns, options);
     } else {
       console.warn(`Searching all files for ${argv.patterns.length} pattern(s)`);
       let addonTypeIds = argv.addontype.map(type => ADDON_TYPE_STRINGS[type] || type);
-      await this.ripgrep.run(addonTypeIds, argv.patterns, options);
+      files = await this.ripgrep.run(addonTypeIds, argv.patterns, options);
+    }
+
+    if (files.length > 0) {
+      await this.push.notify(`Found ${files.length} files`, `Patterns ${argv.patterns}`);
     }
   }
 
