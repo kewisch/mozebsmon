@@ -137,8 +137,10 @@ export default class Ripgrep {
           multilog("\t" + [...skipped].join("\n\t"));
         }
 
-        for (let addon_id of foundNow) {
-          foundAddons.add(addon_id);
+        if (foundAddons) {
+          for (let addon_id of foundNow) {
+            foundAddons.add(addon_id);
+          }
         }
 
         missing = missing.filter(file => {
